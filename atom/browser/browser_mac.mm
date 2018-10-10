@@ -217,14 +217,52 @@ Browser::LoginItemSettings Browser::GetLoginItemSettings(
   return settings;
 }
 
+void RemoveFromLoginItems() {
+  LSSharedFileListRef list =
+      LSSharedFileListCreate(NULL, kLSSharedFileListSessionLoginItems, NULL);
+  if (list) {
+    if (GetLoginItemForApp() != NULL) {
+      CFURLRef url = (__bridge CFURLRef)
+          [NSURL fileURLWithPath:[[NSBundle mainBundle] bundlePath]];
+      if (url) {
+        UInt32 seed;
+        CFArrayRef items = LSSharedFileListCopySnapshot(list, &seed);
+        if (items) {
+          for (id item in (__bridge NSArray*)items) {
+            LSSharedFileListItemRef itemRef =
+                (__bridge LSSharedFileListItemRef)item;
+            if (LSSharedFileListItemResolve(itemRef, 0, &url, NULL) == noErr) {
+              if ([[(__bridge NSURL*)url path]
+                      hasPrefix:[[NSBundle mainBundle] bundlePath]])
+                LSSharedFileListItemRemove(list, itemRef);
+            }
+          }
+          CFRelease(items);
+        } else {
+          printf("No items in list of auto-loaded apps\n");
+        }
+      } else {
+        printf("Unable to find url for bundle\n");
+      }
+    }
+    CFRelease(list);
+  } else {
+    printf("Unable to access shared file list\n");
+  }
+}
+
 void Browser::SetLoginItemSettings(LoginItemSettings settings) {
 #if defined(MAS_BUILD)
   platform_util::SetLoginItemEnabled(settings.open_at_login);
 #else
   if (settings.open_at_login)
     base::mac::AddToLoginItems(settings.open_as_hidden);
-  else
-    base::mac::RemoveFromLoginItems();
+  else {
+    if (@available(macOS 10.10, *))
+      RemoveFromLoginItems();
+    else
+      base::mac::RemoveFromLoginItems();
+  }
 #endif
 }
 
