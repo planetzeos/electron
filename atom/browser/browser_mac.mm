@@ -217,11 +217,12 @@ Browser::LoginItemSettings Browser::GetLoginItemSettings(
   return settings;
 }
 
+// copied from GetLoginItemForApp in base/mac/mac_util.mm
 LSSharedFileListItemRef GetLoginItemForApp() {
   base::ScopedCFTypeRef<LSSharedFileListRef> login_items(
       LSSharedFileListCreate(NULL, kLSSharedFileListSessionLoginItems, NULL));
   if (!login_items.get()) {
-    DLOG(ERROR) << "Couldn't get a Login Items list.";
+    LOG(ERROR) << "Couldn't get a Login Items list.";
     return NULL;
   }
   base::scoped_nsobject<NSArray> login_items_array(
@@ -231,9 +232,6 @@ LSSharedFileListItemRef GetLoginItemForApp() {
     LSSharedFileListItemRef item =
         reinterpret_cast<LSSharedFileListItemRef>(login_items_array[i]);
     CFURLRef item_url_ref = NULL;
-    // It seems that LSSharedFileListItemResolve() can return NULL in
-    // item_url_ref even if the function itself returns noErr. See
-    // https://crbug.com/760989
     if (LSSharedFileListItemResolve(item, 0, &item_url_ref, NULL) == noErr &&
         item_url_ref) {
       base::ScopedCFTypeRef<CFURLRef> item_url(item_url_ref);
@@ -247,36 +245,36 @@ LSSharedFileListItemRef GetLoginItemForApp() {
 }
 
 void RemoveFromLoginItems() {
-  LSSharedFileListRef list =
-      LSSharedFileListCreate(NULL, kLSSharedFileListSessionLoginItems, NULL);
+  base::ScopedCFTypeRef<LSSharedFileListRef> list(
+      LSSharedFileListCreate(NULL, kLSSharedFileListSessionLoginItems, NULL));
   if (list) {
     if (GetLoginItemForApp() != NULL) {
       CFURLRef url = (__bridge CFURLRef)
           [NSURL fileURLWithPath:[[NSBundle mainBundle] bundlePath]];
       if (url) {
         UInt32 seed;
-        CFArrayRef items = LSSharedFileListCopySnapshot(list, &seed);
+        base::ScopedCFTypeRef<CFArrayRef> items(
+            (CFArrayRef)LSSharedFileListCopySnapshot(list, &seed));
         if (items) {
-          for (id item in (__bridge NSArray*)items) {
+          for (id item in (__bridge NSArray*)items.get()) {
             LSSharedFileListItemRef itemRef =
                 (__bridge LSSharedFileListItemRef)item;
-            if (LSSharedFileListItemResolve(itemRef, 0, &url, NULL) == noErr) {
+            if (LSSharedFileListItemResolve(itemRef, 0, &url, NULL) == noErr &&
+                itemRef) {
               if ([[(__bridge NSURL*)url path]
                       hasPrefix:[[NSBundle mainBundle] bundlePath]])
                 LSSharedFileListItemRemove(list, itemRef);
             }
           }
-          CFRelease(items);
         } else {
-          printf("No items in list of auto-loaded apps\n");
+          LOG(ERROR) << "No items in list of auto-loaded apps\n";
         }
       } else {
-        printf("Unable to find url for bundle\n");
+        LOG(ERROR) << "Unable to find url for bundle\n";
       }
     }
-    CFRelease(list);
   } else {
-    printf("Unable to access shared file list\n");
+    LOG(ERROR) << "Unable to access shared file list\n";
   }
 }
 
@@ -287,10 +285,7 @@ void Browser::SetLoginItemSettings(LoginItemSettings settings) {
   if (settings.open_at_login)
     base::mac::AddToLoginItems(settings.open_as_hidden);
   else {
-    if (@available(macOS 10.10, *))
-      RemoveFromLoginItems();
-    else
-      base::mac::RemoveFromLoginItems();
+    RemoveFromLoginItems();
   }
 #endif
 }
