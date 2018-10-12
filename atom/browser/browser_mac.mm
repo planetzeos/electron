@@ -247,34 +247,37 @@ LSSharedFileListItemRef GetLoginItemForApp() {
 void RemoveFromLoginItems() {
   base::ScopedCFTypeRef<LSSharedFileListRef> list(
       LSSharedFileListCreate(NULL, kLSSharedFileListSessionLoginItems, NULL));
-  if (list) {
-    if (GetLoginItemForApp() != NULL) {
-      CFURLRef url = (__bridge CFURLRef)
-          [NSURL fileURLWithPath:[[NSBundle mainBundle] bundlePath]];
-      if (url) {
-        UInt32 seed;
-        base::ScopedCFTypeRef<CFArrayRef> items(
-            (CFArrayRef)LSSharedFileListCopySnapshot(list, &seed));
-        if (items) {
-          for (id item in (__bridge NSArray*)items.get()) {
-            LSSharedFileListItemRef itemRef =
-                (__bridge LSSharedFileListItemRef)item;
-            if (LSSharedFileListItemResolve(itemRef, 0, &url, NULL) == noErr &&
-                itemRef) {
-              if ([[(__bridge NSURL*)url path]
-                      hasPrefix:[[NSBundle mainBundle] bundlePath]])
-                LSSharedFileListItemRemove(list, itemRef);
-            }
-          }
-        } else {
-          LOG(ERROR) << "No items in list of auto-loaded apps\n";
-        }
-      } else {
-        LOG(ERROR) << "Unable to find url for bundle\n";
+  if (!list) {
+    LOG(ERROR) << "Unable to access shared file list";
+    return;
+  }
+
+  if (GetLoginItemForApp() != NULL) {
+    CFURLRef url_ref = (__bridge CFURLRef)
+        [NSURL fileURLWithPath:[[NSBundle mainBundle] bundlePath]];
+    if (!url_ref) {
+      LOG(ERROR) << "Unable to find url for bundle";
+      return;
+    }
+
+    UInt32 seed;
+    base::ScopedCFTypeRef<CFArrayRef> items(
+        (CFArrayRef)LSSharedFileListCopySnapshot(list, &seed));
+    if (!items) {
+      LOG(ERROR) << "No items in list of auto-loaded apps";
+      return;
+    }
+
+    for (id item in (__bridge NSArray*)items.get()) {
+      LSSharedFileListItemRef itemRef = (__bridge LSSharedFileListItemRef)item;
+      if (LSSharedFileListItemResolve(itemRef, 0, &url_ref, NULL) == noErr &&
+          itemRef) {
+        base::ScopedCFTypeRef<CFURLRef> url(url_ref);
+        if ([[(__bridge NSURL*)url.get() path]
+                hasPrefix:[[NSBundle mainBundle] bundlePath]])
+          LSSharedFileListItemRemove(list, itemRef);
       }
     }
-  } else {
-    LOG(ERROR) << "Unable to access shared file list\n";
   }
 }
 
