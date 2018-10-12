@@ -944,6 +944,15 @@ jobs:
       <<: *env-headless-testing
     <<: *steps-native-tests
 
+  linux-x64-chromium-unittests:
+    <<: *machine-linux-2xlarge
+    environment:
+      <<: *env-unittests
+      <<: *env-testing-build
+      <<: *env-enable-sccache
+      <<: *env-headless-testing
+    <<: *steps-native-tests
+
   linux-x64-browsertests:
     <<: *machine-linux-2xlarge
     environment:
