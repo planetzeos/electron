@@ -700,6 +700,12 @@ jobs:
     <<: *machine-linux-2xlarge
     <<: *steps-checkout
 
+  linux-x64-checkout-no-patches:
+    <<: *machine-linux-2xlarge
+    environment:
+      GCLIENT_EXTRA_ARGS: '--custom-var=apply_patches=False'
+    <<: *steps-checkout
+
   # Layer 2: Builds.
   linux-x64-debug:
     <<: *machine-linux-2xlarge
@@ -1211,3 +1217,9 @@ workflows:
       - linux-x64-unittests:
           requires:
             - linux-x64-checkout
+
+      - linux-x64-checkout-no-patches
+
+      - linux-x64-chromium-unittests:
+          requires:
+            - linux-x64-checkout-no-patches
